@@ -1,0 +1,82 @@
+﻿<Window
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:System="clr-namespace:System;assembly=mscorlib"
+        xmlns:local="clr-namespace:yt_dlp"
+        x:Name="window" x:Class="yt_dlp.MainWindow"
+        mc:Ignorable="d"
+        Title="lkk yt-dlp-GUI" Height="445" Width="800" Loaded="window_Loaded" Closing="window_Closing" MinWidth="600" MinHeight="340">
+    <Window.Resources>
+        <ObjectDataProvider x:Key="dataFromEnum" MethodName="GetValues"
+                            ObjectType="{x:Type System:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="local:VideoQuality"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+        <local:EnumConverter x:Key="conv"/>
+    </Window.Resources>
+    <Grid x:Name="grid">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <!--Border BorderBrush="Black" BorderThickness="1"/-->
+        <TextBox x:Name="commandPrompt" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,0,0,0" Height="{Binding ActualHeight, ElementName=grid, Mode=OneWay}" Background="Black" Foreground="White" SelectionBrush="White" SelectionTextBrush="Black" Focusable="False" AllowDrop="False" Cursor="Arrow"/>
+
+        <StackPanel x:Name="Middle_Panel" Grid.Column="1" >
+            <StackPanel x:Name="Buttons" Margin="35,0,0,0">
+                <Button x:Name="Check_ytdlp" Grid.Column="1" Content="Check yt-dlp path" HorizontalAlignment="Left" Margin="0,35,0,0" VerticalAlignment="Top" Grid.ColumnSpan="2" Click="Check_ytdlp_Click"/>
+                <Button x:Name="Check_ffmpeg" Grid.Column="1" Content="Check ffmpeg path" HorizontalAlignment="Left" Margin="0,35,0,0" VerticalAlignment="Top" Grid.ColumnSpan="2" Click="Check_ffmpeg_Click"/>
+                <Button x:Name="Open_Directory" Content="Open download &#xA;    directory in&#xA;    file explorer" Margin="0,35,0,0" Click="Open_Directory_Click"/>
+            </StackPanel>
+            <Label x:Name="label_DownloadList" Content="Waiting Download List" Padding="0,0,0,0" HorizontalContentAlignment="Center" Margin="0,5,0,0"/>
+            <ListView x:Name="Downdload_List" BorderBrush="White" ScrollViewer.VerticalScrollBarVisibility="Hidden" VerticalContentAlignment="Stretch" Focusable="False" IsHitTestVisible="False" IsTextSearchEnabled="False" ScrollViewer.HorizontalScrollBarVisibility="Hidden" Width="{Binding ActualWidth, ElementName=Middle_Panel, Mode=OneWay}" HorizontalContentAlignment="Stretch">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Path=.}" Width="{Binding ActualWidth, ElementName=Downdload_List, Mode=OneWay}" TextWrapping="Wrap" IsHitTestVisible="False"/>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </StackPanel>
+        <StackPanel x:Name="Right_Panel" Grid.Column="2" Margin="42,0,0,0">
+            <StackPanel x:Name="Panel_Path" Grid.Column="2" Margin="0,0,0,0">
+                <Label x:Name="label_ytdlpPath" Content="Path of yt-dlp" VerticalAlignment="Top"/>
+                <TextBox x:Name="textbox_ytdlpPath" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,0,0,0"/>
+                <Button x:Name="button_ytdlp" Content="Select yt-dlp Path ..." Width="120" HorizontalAlignment="Right" Margin="0,5,5,0" Click="Select_ytdlp_Click"/>
+                <Label x:Name="label_ffmpegPath" Content="Path of ffmpeg" VerticalAlignment="Top"/>
+                <TextBox x:Name="textbox_ffmpegPath" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,0,0,0"/>
+                <Button x:Name="button_ffmpeg" Content="Select ffmpeg Path ..." Width="120" HorizontalAlignment="Right" Margin="0,5,5,0" Click="button_ffmpeg_Click"/>
+            </StackPanel>
+            <StackPanel x:Name="Panel_dir" Grid.Column="2" Margin="0,0,0,0">
+                <Label x:Name="label_dir" Content="Download Directory Location" VerticalAlignment="Top"/>
+                <TextBox x:Name="textbox_dir" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,0,0,0"/>
+                <Button x:Name="Download_Directory" Grid.Column="1" Content="Select Download Directory .." HorizontalAlignment="Right" VerticalAlignment="Top" Click="Download_Directory_Click" Margin="0,5,5,0"/>
+            </StackPanel>
+            <StackPanel x:Name="Panel_url" Grid.Column="2" Margin="0,0,0,0">
+                <Label x:Name="label_url" Content="URL" VerticalAlignment="Top"/>
+                <TextBox x:Name="textbox_url" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,0,0,0"/>
+                <Button x:Name="Download" Grid.Column="1" Content="Download" HorizontalAlignment="Right" VerticalAlignment="Top" Click="Download_Click" Margin="0,5,5,0"/>
+            </StackPanel>
+            <Grid x:Name="Panel_Quality">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Label x:Name="label_Quality" Content="Quality"/>
+                <ComboBox x:Name="select_Quality" ItemsSource="{Binding Source={StaticResource dataFromEnum}}" Grid.Column="1" HorizontalAlignment="Left" Margin="0,5,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" SelectionChanged="select_Quality_SelectionChanged">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource conv}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+        </StackPanel>
+    </Grid>
+</Window>
