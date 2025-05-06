@@ -21,16 +21,15 @@ namespace yt_dlp
     }
     internal class DownloadControl
     {
-        List<Dictionary<string, VideoQuality>> downloadList = new();
+        List<List<object>> downloadList = new();
         Func<string[], bool, Process> execute_ytdlp;
         Process P;
         Thread downloadLoop;
+        App.BindDataObject data => App.mainWindow.data;
+
         internal VideoQuality _tempQuality = VideoQuality.p1080;
         public EventHandler<string> OnDownloading;
 
-        public string downloadDir { set; get; }
-        public string ytdlp_Path { set; get; }
-        public string ffmpeg_Path { set; get; }
         bool isDownloading = false;
 
         public DownloadControl(Func<string[], bool, Process> ytdlp)
@@ -55,12 +54,27 @@ namespace yt_dlp
                 else if (!isDownloading && downloadList.Count > 0)
                 {
                     isDownloading = true;
-                    Dictionary<string, VideoQuality> downloadItem = downloadList[0];
+                    var downloadItem = downloadList[0];
                     if (downloadItem == null)
                         continue;
-                    var URL = new List<string>(downloadItem.Keys)[0];
-                    var Quality = downloadItem[URL];
-                    P = execute_ytdlp(new string[] { ytdlp_Path, URL, "--ffmpeg-location", FindffmpegPath(), "-S", "\"height:" + (uint)Quality + ",ext:mp4:m4a\"", "-f", "\"bv*+ba/b\"", "-P", downloadDir }, true);
+                    var URL = downloadItem[0].ToString();
+                    var Quality = downloadItem[1];
+                    var StartTime = (int)downloadItem[2];
+                    var EndTime = (int)downloadItem[3];
+                    var para = new List<string> { data.ytdlp_Path, URL, "--ffmpeg-location", "\"" + FindffmpegPath() + "\"", "-S", "\"height:" + (uint)Quality + ",ext:mp4:m4a\"", "-f", "\"bv*+ba/b\"", "-P", "\"" + data.downloadDir + "\"" };
+                    if (StartTime > 0 || EndTime > 0)
+                    {
+                        para.Add("-S");
+                        para.Add("proto:https");
+                        para.Add("--download-sections");
+                        string s = "\"*";
+                        if (StartTime > 0) s += StartTime.ToString();
+                        s += "-";
+                        if (EndTime > 0) s += EndTime.ToString();
+                        s += "\"";
+                        para.Add(s);
+                    }
+                    P = execute_ytdlp(para.ToArray(), true);
                     downloadList.RemoveAt(0);
                     OnDownloading.Invoke(this, URL);
                 }
@@ -70,24 +84,24 @@ namespace yt_dlp
         {
             _tempQuality = quality;
         }
-        public void AddDownloadList(string URL)
+        public void AddDownloadList(string URL, int startTime, int endTime)
         {
-            AddDownloadList(URL, _tempQuality);
+            AddDownloadList(URL, _tempQuality, startTime, endTime);
         }
-        public void AddDownloadList(string URL, VideoQuality videoQuality)
+        public void AddDownloadList(string URL, VideoQuality videoQuality, int startTime, int endTime)
         {
-            downloadList.Add(new Dictionary<string, VideoQuality>() { { URL, videoQuality } });
+            downloadList.Add(new List<object> { URL, videoQuality, startTime, endTime });
         }
         public string FindffmpegPath()
         {
             var path = Environment.GetEnvironmentVariable("PATH");
             var directories = path.Split(';');
-            if (ffmpeg_Path.Contains(":"))
-                return ffmpeg_Path;
+            if (data.ffmpeg_Path.Contains(":"))
+                return data.ffmpeg_Path;
 
             foreach (var dir in directories)
             {
-                var fullpath = Path.Combine(dir, ffmpeg_Path);
+                var fullpath = Path.Combine(dir, data.ffmpeg_Path);
                 if (File.Exists(fullpath)) return fullpath;
             }
 

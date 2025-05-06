@@ -6,6 +6,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace yt_dlp
 {
@@ -17,37 +19,26 @@ namespace yt_dlp
         ProcessStartInfo startInfo;
         DownloadControl downloadControl;
         RegistryKey config;
+        public App.BindDataObject data = new();
 
-        string ytdlp_Path
+        int startTime
         {
-            get => textbox_ytdlpPath.Text;
-            set
+            get
             {
-                textbox_ytdlpPath.Text = value;
-                downloadControl.ytdlp_Path = value;
+                Int32.TryParse(from_hours.Text, out int hour);
+                Int32.TryParse(from_mins.Text, out int minute);
+                Int32.TryParse(from_secs.Text, out int second);
+                return hour * 60 * 60 + minute * 60 + second;
             }
         }
-        string ffmpeg_Path
+        int endTime
         {
-            get => textbox_ffmpegPath.Text;
-            set
+            get
             {
-                textbox_ffmpegPath.Text = value;
-                downloadControl.ffmpeg_Path = value;
-            }
-        }
-        string URL
-        {
-            get => textbox_url.Text;
-            set { textbox_url.Text = value; }
-        }
-        string Dir
-        {
-            get => textbox_dir.Text;
-            set
-            {
-                textbox_dir.Text = value;
-                downloadControl.downloadDir = value;
+                Int32.TryParse(to_hours.Text, out int hour);
+                Int32.TryParse(to_mins.Text, out int minute);
+                Int32.TryParse(to_secs.Text, out int second);
+                return hour * 60 * 60 + minute * 60 + second;
             }
         }
 
@@ -55,16 +46,16 @@ namespace yt_dlp
         {
 
             downloadControl = new(ExecuteCommandPrompt);
+            this.DataContext = data;
             InitializeComponent();
             config = Registry.CurrentUser.CreateSubKey("Software\\yt-dlp-GUI", RegistryKeyPermissionCheck.ReadWriteSubTree);
-            //config = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64);
-            //config = config.CreateSubKey("Software\\yt-dlp-GUI", RegistryKeyPermissionCheck.ReadWriteSubTree);
-            ytdlp_Path = (string)config.GetValue("ytdlp_Path", "yt-dlp.exe");
-            ffmpeg_Path = (string)config.GetValue("ffmpeg_Path", "ffmpeg.exe");
-            Dir = (string)config.GetValue("download_Dir", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads");
+            data.ytdlp_Path = (string)config.GetValue("ytdlp_Path", "yt-dlp.exe");
+            data.ffmpeg_Path = (string)config.GetValue("ffmpeg_Path", "ffmpeg.exe");
+            data.downloadDir = (string)config.GetValue("download_Dir", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads");
             uint quality = Convert.ToUInt32(config.GetValue("quality", 1080u).ToString());
             downloadControl.SetQuality((VideoQuality)quality);
             downloadControl.StartLoop();
+
         }
 
         private void window_Loaded(object sender, RoutedEventArgs e)
@@ -135,8 +126,6 @@ namespace yt_dlp
                     }
                 }
                 text = System.Text.Encoding.Default.GetString(bytes);
-                //Console.WriteLine(bytes.Length);
-                //Console.WriteLine(ToLiteral(text));
                 Dispatcher.Invoke(() => delegate_UpdateText(text));
             }
         }
@@ -159,15 +148,19 @@ namespace yt_dlp
 
         private void Download_Click(object sender, RoutedEventArgs e)
         {
-            if (Uri.TryCreate(URL, UriKind.Absolute, out Uri uriResult)
+            if (Uri.TryCreate(data.URL, UriKind.Absolute, out Uri uriResult)
                 && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
             {
-                Dispatcher.Invoke(() => Downdload_List.Items.Add(URL));
-                downloadControl.AddDownloadList(URL);
+                Dispatcher.Invoke(() => Downdload_List.Items.Add(data.URL));
+                downloadControl.AddDownloadList(data.URL, startTime, endTime);
             }
             else
                 Dispatcher.Invoke(() => MessageBox.Show(this, "Invalid URL", "Error", MessageBoxButton.OK, MessageBoxImage.Error));
-            URL = "";
+            if (Autoreset.IsChecked ?? false)
+            {
+                Dispatcher.Invoke(() => { data.URL = ""; });
+                ResetTimeRange();
+            }
         }
         void OnDownloadStarted(object sender, string e)
         {
@@ -176,15 +169,15 @@ namespace yt_dlp
 
         private void Check_ytdlp_Click(object sender, RoutedEventArgs e)
         {
-            if (!ytdlp_Path.Contains(":"))
-                ExecuteCommandPrompt(new string[] { "where", ytdlp_Path });
-            ExecuteCommandPrompt(new string[] { ytdlp_Path, "--version" }, false);
+            if (!data.ytdlp_Path.Contains(":"))
+                ExecuteCommandPrompt(new string[] { "where", data.ytdlp_Path });
+            ExecuteCommandPrompt(new string[] { data.ytdlp_Path, "--version" }, false);
         }
         private void Check_ffmpeg_Click(object sender, RoutedEventArgs e)
         {
-            if (!ytdlp_Path.Contains(":"))
-                ExecuteCommandPrompt(new string[] { "where", ffmpeg_Path });
-            ExecuteCommandPrompt(new string[] { ffmpeg_Path, "-version" }, false);
+            if (!data.ytdlp_Path.Contains(":"))
+                ExecuteCommandPrompt(new string[] { "where", data.ffmpeg_Path });
+            ExecuteCommandPrompt(new string[] { data.ffmpeg_Path, "-version" }, false);
         }
         private void Select_ytdlp_Click(object sender, RoutedEventArgs e)
         {
@@ -204,7 +197,7 @@ namespace yt_dlp
             {
                 // Open document
                 string filename = dialog.FileName;
-                ytdlp_Path = filename;
+                data.ytdlp_Path = filename;
             }
         }
         private void button_ffmpeg_Click(object sender, RoutedEventArgs e)
@@ -225,7 +218,7 @@ namespace yt_dlp
             {
                 // Open document
                 string filename = dialog.FileName;
-                ytdlp_Path = filename;
+                data.ytdlp_Path = filename;
             }
         }
         private void Download_Directory_Click(object sender, RoutedEventArgs e)
@@ -233,35 +226,132 @@ namespace yt_dlp
             var dialog = new Microsoft.WindowsAPICodePack.Dialogs.CommonOpenFileDialog()
             {
                 IsFolderPicker = true,
-                InitialDirectory = Dir
+                InitialDirectory = data.downloadDir
             };
             var result = dialog.ShowDialog();
             if (result == Microsoft.WindowsAPICodePack.Dialogs.CommonFileDialogResult.Ok)
             {
-                Dir = dialog.FileName;
+                data.downloadDir = dialog.FileName;
             }
         }
-
         private void Open_Directory_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start("explorer", Dir);
+            Process.Start("explorer", data.downloadDir);
         }
         private void select_Quality_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             downloadControl.SetQuality((VideoQuality)select_Quality.SelectedValue);
         }
 
+        private void timeRange_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            char c = KeyboardProcessing.GetCharFromKey(e.Key);
+            e.Handled = true;
+            if (c >= '0' && c <= '9')
+            {
+                if (((TextBox)sender).Text.Length >= 2 && ((TextBox)sender).SelectionLength == 0)
+                {
+                    ((TextBox)sender).Text = "99";
+                    return;
+                }
+                e.Handled = false;
+            }
+        }
+        private void hours_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            char c = KeyboardProcessing.GetCharFromKey(e.Key);
+            e.Handled = true;
+            if (c >= '0' && c <= '9')
+            {
+                if (((TextBox)sender).Text.Length >= 3 && ((TextBox)sender).SelectionLength == 0)
+                {
+                    ((TextBox)sender).Text = "999";
+                    return;
+                }
+                e.Handled = false;
+            }
+        }
+        private void from_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+        {
+            CauculateTimeChange(from_hours, from_mins, from_secs);
+            CheckValidTimeRange();
+        }
+        private void to_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+        {
+            CauculateTimeChange(to_hours, to_mins, to_secs);
+            CheckValidTimeRange();
+        }
+        void CauculateTimeChange(TextBox hours, TextBox mins, TextBox secs)
+        {
+            int hour = 0, min, case_ = -1;
+            // Sec
+            Int32.TryParse(secs.Text, out int sec);
+            if (sec >= 60)
+            {
+                Int32.TryParse(mins.Text, out min);
+                min++;
+                sec -= 60;
+            }
+            // Min
+            Int32.TryParse(mins.Text, out min);
+            if (min >= 60)
+            {
+                Int32.TryParse(hours.Text, out hour);
+                hour++;
+                min -= 60;
+            }
+            case_ = sec == 0 ? 2 : case_;
+            case_ = min == 0 ? 1 : case_;
+            case_ = hour == 0 ? 0 : case_;
 
+            switch (case_)
+            {
+                case 0:
+                case 1:
+                    mins.Text = string.Format("{0:00}", min);
+                    goto case 2;
+                case 2:
+                    secs.Text = string.Format("{0:00}", sec);
+                    break;
+            }
+        }
+        void CheckValidTimeRange()
+        {
+            if (startTime == 0 || endTime == 0)
+                return;
+            if (startTime > endTime)
+            {
+                string temp;
+                temp = from_hours.Text;
+                from_hours.Text = to_hours.Text;
+                to_hours.Text = temp;
+                temp = from_mins.Text;
+                from_mins.Text = to_mins.Text;
+                to_mins.Text = temp;
+                temp = from_secs.Text;
+                from_secs.Text = to_secs.Text;
+                to_secs.Text = temp;
+            }
+        }
+        private void resetTimeRange_Click(object sender, RoutedEventArgs e) { ResetTimeRange(); }
+        void ResetTimeRange()
+        {
+            from_hours.Text = string.Empty;
+            from_mins.Text = string.Empty;
+            from_secs.Text = string.Empty;
+            to_hours.Text = string.Empty;
+            to_mins.Text = string.Empty;
+            to_secs.Text = string.Empty;
+        }
         private void window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            config.SetValue("ytdlp_Path", ytdlp_Path);
-            config.SetValue("ffmpeg_Path", ffmpeg_Path);
-            config.SetValue("download_Dir", Dir);
+            config.SetValue("ytdlp_Path", data.ytdlp_Path);
+            config.SetValue("ffmpeg_Path", data.ffmpeg_Path);
+            config.SetValue("download_Dir", data.downloadDir);
             config.SetValue("quality", (uint)downloadControl._tempQuality, RegistryValueKind.DWord);
             config.Close();
             Environment.Exit(0);
         }
-
 
     }
 }
