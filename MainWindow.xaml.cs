@@ -4,6 +4,7 @@ using System.CodeDom;
 using System.CodeDom.Compiler;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,8 +17,12 @@ namespace yt_dlp
     /// </summary>
     public partial class MainWindow : Window
     {
-        ProcessStartInfo startInfo;
+        DataTemplate select_QualityItemTemplate;
+
         DownloadControl downloadControl;
+        GetVideoQuality getvideoquality;
+
+        ProcessStartInfo startInfo;
         RegistryKey config;
         public App.BindDataObject data = new();
 
@@ -55,7 +60,7 @@ namespace yt_dlp
             uint quality = Convert.ToUInt32(config.GetValue("quality", 1080u).ToString());
             downloadControl.SetQuality((VideoQuality)quality);
             downloadControl.StartLoop();
-
+            getvideoquality = new();
         }
 
         private void window_Loaded(object sender, RoutedEventArgs e)
@@ -68,8 +73,8 @@ namespace yt_dlp
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-            select_Quality.ItemsSource = (uint[])Enum.GetValues(typeof(VideoQuality));
-            select_Quality.SelectedValue = downloadControl._tempQuality;
+            select_QualityItemTemplate = select_Quality.ItemTemplate;
+            InitGeneralVideoQuality();
             downloadControl.OnDownloading += OnDownloadStarted;
         }
 
@@ -139,6 +144,12 @@ namespace yt_dlp
                     return writer.ToString();
                 }
             }
+        }
+        void InitGeneralVideoQuality()
+        {
+            select_Quality.ItemsSource = (uint[])Enum.GetValues(typeof(VideoQuality));
+            select_Quality.SelectedValue = downloadControl._tempQuality;
+            select_Quality.ItemTemplate = select_QualityItemTemplate;
         }
         private void delegate_UpdateText(string text)
         {
@@ -236,7 +247,13 @@ namespace yt_dlp
         }
         private void Open_Directory_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start("explorer", data.downloadDir);
+            Process.Start(new ProcessStartInfo()
+            {
+                FileName = "cmd",
+                Arguments = "/c start \"\" \"" + data.downloadDir + "\"",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            });
         }
         private void select_Quality_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
@@ -353,5 +370,24 @@ namespace yt_dlp
             Environment.Exit(0);
         }
 
+        private void GetQualityBtn_Click(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                GetQualityBtn.IsEnabled = false;
+                GetQualityBtn.Content = "Please wait...";
+            });
+            ThreadStart starter = () => getvideoquality.Getformat_id(data.URL);
+            starter += () =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    GetQualityBtn.IsEnabled = true;
+                    GetQualityBtn.Content = "Get Video Quality";
+                });
+            };
+            var t = new Thread(starter);
+            t.Start();
+        }
     }
 }

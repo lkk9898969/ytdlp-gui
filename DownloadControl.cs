@@ -61,7 +61,11 @@ namespace yt_dlp
                     var Quality = downloadItem[1];
                     var StartTime = (int)downloadItem[2];
                     var EndTime = (int)downloadItem[3];
-                    var para = new List<string> { data.ytdlp_Path, URL, "--ffmpeg-location", "\"" + FindffmpegPath() + "\"", "-S", "\"height:" + (uint)Quality + ",ext:mp4:m4a\"", "-f", "\"bv*+ba/b\"", "-P", "\"" + data.downloadDir + "\"" };
+                    List<string> para;
+                    if (Quality is VideoQuality)
+                        para = new List<string> { data.ytdlp_Path, URL, "--ffmpeg-location", "\"" + FindffmpegPath() + "\"", "-S", "\"height:" + (uint)Quality + ",ext:mp4:m4a\"", "-f", "\"bv*+ba/b\"", "-P", "\"" + data.downloadDir + "\"" };
+                    else
+                        para = new List<string> { data.ytdlp_Path, URL, "--ffmpeg-location", "\"" + FindffmpegPath() + "\"", "-S", "\"ext:mp4:m4a\"", "-f", Quality.ToString(), "-P", "\"" + data.downloadDir + "\"" };
                     if (StartTime > 0 || EndTime > 0)
                     {
                         para.Add("-S");
@@ -91,6 +95,10 @@ namespace yt_dlp
         public void AddDownloadList(string URL, VideoQuality videoQuality, int startTime, int endTime)
         {
             downloadList.Add(new List<object> { URL, videoQuality, startTime, endTime });
+        }
+        public void AddDownloadList(string URL, string format_id, int startTime, int endTime)
+        {
+            downloadList.Add(new List<object> { URL, format_id, startTime, endTime });
         }
         public string FindffmpegPath()
         {
