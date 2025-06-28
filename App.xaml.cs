@@ -21,6 +21,7 @@ namespace yt_dlp
             private string _ffmpeg_Path;
             private string _URL;
             private string _downloadDir;
+            private string _str;
             public string ytdlp_Path
             {
                 get { return _ytdlp_Path; }
@@ -40,6 +41,11 @@ namespace yt_dlp
             {
                 get { return _downloadDir; }
                 set { _downloadDir = value; OnPropertyChanged(); }
+            }
+            public string str
+            {
+                get { return _str; }
+                set { _str = value; OnPropertyChanged(); }
             }
 
             public event PropertyChangedEventHandler PropertyChanged;

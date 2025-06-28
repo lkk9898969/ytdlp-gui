@@ -2,9 +2,9 @@
 using System;
 using System.CodeDom;
 using System.CodeDom.Compiler;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,14 +17,14 @@ namespace yt_dlp
     /// </summary>
     public partial class MainWindow : Window
     {
-        DataTemplate select_QualityItemTemplate;
-
         DownloadControl downloadControl;
         GetVideoQuality getvideoquality;
 
         ProcessStartInfo startInfo;
         RegistryKey config;
         public App.BindDataObject data = new();
+
+        VideoQuality GeneralVideoQualitytemp;
 
         int startTime
         {
@@ -47,20 +47,21 @@ namespace yt_dlp
             }
         }
 
+
+        #region window init / deinit fuction
         public MainWindow()
         {
-
             downloadControl = new(ExecuteCommandPrompt);
+            getvideoquality = new();
+
             this.DataContext = data;
             InitializeComponent();
             config = Registry.CurrentUser.CreateSubKey("Software\\yt-dlp-GUI", RegistryKeyPermissionCheck.ReadWriteSubTree);
             data.ytdlp_Path = (string)config.GetValue("ytdlp_Path", "yt-dlp.exe");
             data.ffmpeg_Path = (string)config.GetValue("ffmpeg_Path", "ffmpeg.exe");
             data.downloadDir = (string)config.GetValue("download_Dir", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads");
-            uint quality = Convert.ToUInt32(config.GetValue("quality", 1080u).ToString());
-            downloadControl.SetQuality((VideoQuality)quality);
+            GeneralVideoQualitytemp = VideoQuality.p1080;
             downloadControl.StartLoop();
-            getvideoquality = new();
         }
 
         private void window_Loaded(object sender, RoutedEventArgs e)
@@ -73,11 +74,21 @@ namespace yt_dlp
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-            select_QualityItemTemplate = select_Quality.ItemTemplate;
-            InitGeneralVideoQuality();
+            Init_select_Quality();
             downloadControl.OnDownloading += OnDownloadStarted;
         }
+        private void window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            config.SetValue("ytdlp_Path", data.ytdlp_Path);
+            config.SetValue("ffmpeg_Path", data.ffmpeg_Path);
+            config.SetValue("download_Dir", data.downloadDir);
+            config.Close();
+            Environment.Exit(0);
+        }
+        #endregion
 
+
+        #region redirect console output function
         private Process ExecuteCommandPrompt(string[] args, bool clear = true)
         {
             Process p;
@@ -145,25 +156,25 @@ namespace yt_dlp
                 }
             }
         }
-        void InitGeneralVideoQuality()
-        {
-            select_Quality.ItemsSource = (uint[])Enum.GetValues(typeof(VideoQuality));
-            select_Quality.SelectedValue = downloadControl._tempQuality;
-            select_Quality.ItemTemplate = select_QualityItemTemplate;
-        }
-        private void delegate_UpdateText(string text)
-        {
-            commandPrompt.AppendText(text);
-            commandPrompt.ScrollToEnd();
-        }
+        #endregion
 
+
+        #region control event callback
         private void Download_Click(object sender, RoutedEventArgs e)
         {
             if (Uri.TryCreate(data.URL, UriKind.Absolute, out Uri uriResult)
                 && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
             {
+                if (select_Quality.SelectedValue == null)
+                {
+                    Dispatcher.Invoke(() => MessageBox.Show(this, "Invalid Video Quality", "Error", MessageBoxButton.OK, MessageBoxImage.Error));
+                    return;
+                }
+                else if (typeof(VideoQuality).IsInstanceOfType(select_Quality.SelectedValue))
+                    downloadControl.AddDownloadList(data.URL, (VideoQuality)select_Quality.SelectedValue, startTime, endTime);
+                else
+                    downloadControl.AddDownloadList(data.URL, select_Quality.SelectedValue.ToString(), startTime, endTime);
                 Dispatcher.Invoke(() => Downdload_List.Items.Add(data.URL));
-                downloadControl.AddDownloadList(data.URL, startTime, endTime);
             }
             else
                 Dispatcher.Invoke(() => MessageBox.Show(this, "Invalid URL", "Error", MessageBoxButton.OK, MessageBoxImage.Error));
@@ -172,10 +183,6 @@ namespace yt_dlp
                 Dispatcher.Invoke(() => { data.URL = ""; });
                 ResetTimeRange();
             }
-        }
-        void OnDownloadStarted(object sender, string e)
-        {
-            Dispatcher.Invoke(() => Downdload_List.Items.Remove(e));
         }
 
         private void Check_ytdlp_Click(object sender, RoutedEventArgs e)
@@ -257,7 +264,7 @@ namespace yt_dlp
         }
         private void select_Quality_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            downloadControl.SetQuality((VideoQuality)select_Quality.SelectedValue);
+
         }
 
         private void timeRange_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -298,6 +305,38 @@ namespace yt_dlp
             CauculateTimeChange(to_hours, to_mins, to_secs);
             CheckValidTimeRange();
         }
+        private void resetTimeRange_Click(object sender, RoutedEventArgs e) { ResetTimeRange(); }
+        private async void GetQualityBtn_Click(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                GetQualityBtn.IsEnabled = false;
+                GetQualityBtn.Content = "Please wait...";
+                clear_select_Quality();
+            });
+            var result = await Task.Run(() => getvideoquality.Getformat_id(data.URL));
+            if (result.Count != 0)
+            {
+                ObservableCollection<VideoInfoItem> ItemsSource = new();
+                foreach (var item in result)
+                {
+                    ItemsSource.Add(new VideoInfoItem() { format_id = item.format_id, quality = item.resolution });
+                }
+                select_Quality.ItemsSource = ItemsSource;
+                select_Quality.SelectedValuePath = "format_id";
+            }
+            Dispatcher.Invoke(() =>
+            {
+                GetQualityBtn.IsEnabled = true;
+                GetQualityBtn.Content = "Get Video Quality";
+            });
+        }
+        private void textbox_url_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            Dispatcher.Invoke(() => Init_select_Quality());
+        }
+        #endregion
+
         void CauculateTimeChange(TextBox hours, TextBox mins, TextBox secs)
         {
             int hour = 0, min, case_ = -1;
@@ -350,7 +389,6 @@ namespace yt_dlp
                 to_secs.Text = temp;
             }
         }
-        private void resetTimeRange_Click(object sender, RoutedEventArgs e) { ResetTimeRange(); }
         void ResetTimeRange()
         {
             from_hours.Text = string.Empty;
@@ -360,34 +398,30 @@ namespace yt_dlp
             to_mins.Text = string.Empty;
             to_secs.Text = string.Empty;
         }
-        private void window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
-        {
-            config.SetValue("ytdlp_Path", data.ytdlp_Path);
-            config.SetValue("ffmpeg_Path", data.ffmpeg_Path);
-            config.SetValue("download_Dir", data.downloadDir);
-            config.SetValue("quality", (uint)downloadControl._tempQuality, RegistryValueKind.DWord);
-            config.Close();
-            Environment.Exit(0);
-        }
 
-        private void GetQualityBtn_Click(object sender, RoutedEventArgs e)
+        #region Invoker fuction
+        void Init_select_Quality()
         {
-            Dispatcher.Invoke(() =>
-            {
-                GetQualityBtn.IsEnabled = false;
-                GetQualityBtn.Content = "Please wait...";
-            });
-            ThreadStart starter = () => getvideoquality.Getformat_id(data.URL);
-            starter += () =>
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    GetQualityBtn.IsEnabled = true;
-                    GetQualityBtn.Content = "Get Video Quality";
-                });
-            };
-            var t = new Thread(starter);
-            t.Start();
+            select_Quality.SelectedValuePath = "";
+            select_Quality.ItemsSource = (uint[])Enum.GetValues(typeof(VideoQuality));
+            select_Quality.SelectedValue = GeneralVideoQualitytemp;
         }
+        void clear_select_Quality()
+        {
+            if (typeof(VideoQuality).IsInstanceOfType(select_Quality.SelectedValue))
+                GeneralVideoQualitytemp = (VideoQuality)select_Quality.SelectedValue;
+            select_Quality.SelectedIndex = -1;
+            select_Quality.ItemsSource = null;
+        }
+        private void delegate_UpdateText(string text)
+        {
+            commandPrompt.AppendText(text);
+            commandPrompt.ScrollToEnd();
+        }
+        void OnDownloadStarted(object sender, string e)
+        {
+            Dispatcher.Invoke(() => Downdload_List.Items.Remove(e));
+        }
+        #endregion
     }
 }
