@@ -63,7 +63,12 @@ namespace yt_dlp
             GeneralVideoQualitytemp = VideoQuality.p1080;
             downloadControl.StartLoop();
         }
+        private void window_Initialized(object sender, EventArgs e)
+        {
+            var uri = new Uri("PresentationFramework.Aero;V3.0.0.0;31bf3856ad364e35;component/themes/aero.normalcolor.xaml", UriKind.Relative);
 
+            Resources.MergedDictionaries.Add(Application.LoadComponent(uri) as ResourceDictionary);
+        }
         private void window_Loaded(object sender, RoutedEventArgs e)
         {
             startInfo = new()
@@ -75,7 +80,7 @@ namespace yt_dlp
                 CreateNoWindow = true,
             };
             Init_select_Quality();
-            downloadControl.OnDownloading += OnDownloadStarted;
+            downloadControl.OnDownloading += (object sender, string e) => { Dispatcher.Invoke(() => Downdload_List.Items.Remove(e)); };
         }
         private void window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
@@ -162,8 +167,7 @@ namespace yt_dlp
         #region control event callback
         private void Download_Click(object sender, RoutedEventArgs e)
         {
-            if (Uri.TryCreate(data.URL, UriKind.Absolute, out Uri uriResult)
-                && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
+            if (CheckValidURL())
             {
                 if (select_Quality.SelectedValue == null)
                 {
@@ -176,8 +180,6 @@ namespace yt_dlp
                     downloadControl.AddDownloadList(data.URL, select_Quality.SelectedValue.ToString(), startTime, endTime);
                 Dispatcher.Invoke(() => Downdload_List.Items.Add(data.URL));
             }
-            else
-                Dispatcher.Invoke(() => MessageBox.Show(this, "Invalid URL", "Error", MessageBoxButton.OK, MessageBoxImage.Error));
             if (Autoreset.IsChecked ?? false)
             {
                 Dispatcher.Invoke(() => { data.URL = ""; });
@@ -312,18 +314,21 @@ namespace yt_dlp
             {
                 GetQualityBtn.IsEnabled = false;
                 GetQualityBtn.Content = "Please wait...";
-                clear_select_Quality();
             });
-            var result = await Task.Run(() => getvideoquality.Getformat_id(data.URL));
-            if (result.Count != 0)
+            if (CheckValidURL())
             {
-                ObservableCollection<VideoInfoItem> ItemsSource = new();
-                foreach (var item in result)
+                Dispatcher.Invoke(clear_select_Quality);
+                var result = await Task.Run(() => getvideoquality.Getformat_id(data.URL));
+                if (result.Count != 0)
                 {
-                    ItemsSource.Add(new VideoInfoItem() { format_id = item.format_id, quality = item.resolution });
+                    ObservableCollection<VideoInfoItem> ItemsSource = new();
+                    foreach (var item in result)
+                    {
+                        ItemsSource.Add(new VideoInfoItem() { format_id = item.format_id, quality = item.resolution });
+                    }
+                    select_Quality.ItemsSource = ItemsSource;
+                    select_Quality.SelectedValuePath = "format_id";
                 }
-                select_Quality.ItemsSource = ItemsSource;
-                select_Quality.SelectedValuePath = "format_id";
             }
             Dispatcher.Invoke(() =>
             {
@@ -336,6 +341,8 @@ namespace yt_dlp
             Dispatcher.Invoke(() => Init_select_Quality());
         }
         #endregion
+
+        #region helper functions
 
         void CauculateTimeChange(TextBox hours, TextBox mins, TextBox secs)
         {
@@ -399,6 +406,17 @@ namespace yt_dlp
             to_secs.Text = string.Empty;
         }
 
+        bool CheckValidURL()
+        {
+            if (Uri.TryCreate(data.URL, UriKind.Absolute, out Uri uriResult)
+                && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
+                return true;
+            else
+                Dispatcher.Invoke(() => MessageBox.Show(this, "Invalid URL", "Error", MessageBoxButton.OK, MessageBoxImage.Error));
+            return false;
+        }
+        #endregion
+
         #region Invoker fuction
         void Init_select_Quality()
         {
@@ -418,10 +436,9 @@ namespace yt_dlp
             commandPrompt.AppendText(text);
             commandPrompt.ScrollToEnd();
         }
-        void OnDownloadStarted(object sender, string e)
-        {
-            Dispatcher.Invoke(() => Downdload_List.Items.Remove(e));
-        }
+
         #endregion
+
+
     }
 }
